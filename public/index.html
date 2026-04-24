@@ -299,6 +299,27 @@ document.getElementById('panel').classList.add('collapsed');
 // ── Navigation state ──────────────────────────────────────────────────────────
 let routeLayers=[], selKey=null, activeDestDef=null, activeDestLat=null, activeDestLng=null;
 let routePath=[], announcedWaypoints=new Set(), arrivedFlag=false;
+let routeSteps=[], announcedSteps=new Set();
+
+// Build human-readable instruction from OSRM step
+function buildTurnInstruction(step){
+  const type=step.type, mod=step.modifier||'';
+  if(type==='turn'){
+    if(mod==='left')       return 'Turn left';
+    if(mod==='right')      return 'Turn right';
+    if(mod==='sharp left') return 'Make a sharp left turn';
+    if(mod==='sharp right')return 'Make a sharp right turn';
+    if(mod==='slight left')return 'Bear left';
+    if(mod==='slight right')return 'Bear right';
+    if(mod==='uturn')      return 'Make a U-turn';
+  }
+  if(type==='roundabout'||type==='rotary') return 'Enter the roundabout';
+  if(type==='arrive')     return 'You have arrived';
+  if(type==='continue')   return 'Continue straight';
+  if(mod==='left')        return 'Turn left';
+  if(mod==='right')       return 'Turn right';
+  return 'Continue';
+}
 
 function remainingDist(lat,lng){
   if(!routePath.length) return 0;
@@ -335,6 +356,20 @@ function checkNavProgress(lat,lng){
       speak('In '+fmt(remaining)+', you will reach '+activeDestDef.label);
     }
   });
+
+  // ── Turn-by-turn announcements from OSRM steps ──────────────────────────────
+  routeSteps.forEach((step,i)=>{
+    const stepKey='step-'+i;
+    if(announcedSteps.has(stepKey)) return;
+    const distToStep=haversine(lat,lng,step.lat,step.lng);
+    // Announce at ~80m before the turn
+    if(distToStep<80){
+      announcedSteps.add(stepKey);
+      const instruction=buildTurnInstruction(step);
+      const streetName=step.name?(' on '+step.name):'';
+      speak(instruction+streetName);
+    }
+  });
 }
 
 // ── Arrival modal ─────────────────────────────────────────────────────────────
@@ -367,6 +402,7 @@ function clearRoute(){
   routeLayers.forEach(l=>map.removeLayer(l)); routeLayers=[];
   selKey=null; activeDestDef=null; activeDestLat=null; activeDestLng=null;
   routePath=[]; announcedWaypoints=new Set(); arrivedFlag=false;
+  routeSteps=[]; announcedSteps=new Set();
   document.getElementById('rcard').style.display='none';
   undimRoadLayers();
 }
@@ -393,6 +429,7 @@ async function doRoute(toLat,toLng,def){
     if(data.ok&&data.coordinates&&data.coordinates.length>1){
       isFallback=false;
       routePath=data.coordinates.map(([lng,lat])=>({latitude:lat,longitude:lng}));
+      routeSteps=data.steps||[];
       const segs=colorizeRoute(data.coordinates,def.color);
       segs.forEach(seg=>{
         routeLayers.push(L.polyline(seg.latlngs,{color:seg.color,weight:6,opacity:.9}).addTo(map));
