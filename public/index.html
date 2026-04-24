@@ -24,8 +24,8 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
 .zbtn{width:44px;height:44px;border-radius:22px;background:rgba(255,255,255,.96);border:none;font-size:24px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.2);display:flex;align-items:center;justify-content:center;color:#1B2A4A}
 
 /* Layer panel */
-#panel{position:fixed;bottom:0;left:0;right:0;background:rgba(255,255,255,.97);border-radius:16px 16px 0 0;box-shadow:0 -4px 20px rgba(0,0,0,.12);z-index:1000;transition:max-height .3s cubic-bezier(.4,0,.2,1);max-height:200px;overflow:hidden}
-#panel.collapsed{max-height:70px}
+#panel{position:fixed;bottom:0;left:0;right:0;background:rgba(255,255,255,.97);border-radius:16px 16px 0 0;box-shadow:0 -4px 20px rgba(0,0,0,.12);z-index:1000;transition:max-height .3s cubic-bezier(.4,0,.2,1);max-height:220px;overflow:hidden}
+#panel.collapsed{max-height:90px}
 #panel-toggle{display:flex;align-items:center;justify-content:center;padding:8px 0 4px;cursor:pointer;user-select:none}
 #toggle-bar{width:36px;height:4px;border-radius:2px;background:#ddd;transition:background .2s}
 #panel-toggle:hover #toggle-bar{background:#aaa}
@@ -33,7 +33,7 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
 #panel.collapsed #toggle-arrow{transform:rotate(180deg)}
 #panel-inner{padding:0 12px 16px}
 #panel h4{font-size:11px;font-weight:700;color:#888;margin-bottom:8px;padding-left:4px;letter-spacing:.8px}
-#chips{display:flex;gap:8px;flex-wrap:wrap;padding-bottom:2px;max-height:120px;overflow-y:auto}
+#chips{display:flex;gap:8px;flex-wrap:wrap;padding-bottom:2px;max-height:140px;overflow-y:auto}
 #chips::-webkit-scrollbar{width:4px}
 #chips::-webkit-scrollbar-thumb{background:#ddd;border-radius:2px}
 #panel.collapsed #chips{flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;max-height:none}
