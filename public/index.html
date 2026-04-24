@@ -322,11 +322,26 @@ document.getElementById('arrival-done').onclick=()=>{
 };
 
 // ── Route ─────────────────────────────────────────────────────────────────────
+const ROAD_KEYS = ['safe','average','poor','critical'];
+
+function dimRoadLayers(){
+  ROAD_KEYS.forEach(k=>{
+    if(layers[k]) layers[k].setStyle({opacity:0.15, fillOpacity:0.05});
+  });
+}
+function undimRoadLayers(){
+  ROAD_KEYS.forEach(k=>{
+    const def=POLY.find(p=>p.key===k);
+    if(layers[k] && def) layers[k].setStyle({opacity:def.opacity, fillOpacity:def.opacity});
+  });
+}
+
 function clearRoute(){
   routeLayers.forEach(l=>map.removeLayer(l)); routeLayers=[];
   selKey=null; activeDestDef=null; activeDestLat=null; activeDestLng=null;
   routePath=[]; announcedWaypoints=new Set(); arrivedFlag=false;
   document.getElementById('rcard').style.display='none';
+  undimRoadLayers();
 }
 
 async function doRoute(toLat,toLng,def){
@@ -372,7 +387,7 @@ async function doRoute(toLat,toLng,def){
 
   document.getElementById('rname').textContent=def.emoji+' '+def.label;
   document.getElementById('rcard').style.display='block';
-}
+  dimRoadLayers();
 
 // ── Layer definitions ─────────────────────────────────────────────────────────
 const POLY=[
