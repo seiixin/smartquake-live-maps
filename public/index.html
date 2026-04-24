@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+<title>SmartQuake Live Map</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;overflow:hidden;background:#0D1B2A}
+#map{height:100vh;width:100vw}
+
+/* Route card */
+#rcard{position:fixed;top:16px;left:14px;right:70px;background:#1B2A4A;border-radius:14px;padding:12px 14px;z-index:1000;display:none;color:#fff;box-shadow:0 4px 16px rgba(0,0,0,.3)}
+#rname{font-size:15px;font-weight:700}
+#rdist{font-size:12px;color:rgba(255,255,255,.65);margin-top:2px}
+#rcancel{position:absolute;top:10px;right:10px;width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,.15);border:none;color:#fff;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+
+/* Guidance button */
+#gbtn{position:fixed;top:16px;right:14px;width:48px;height:48px;border-radius:50%;background:#C0392B;border:none;font-size:22px;cursor:pointer;box-shadow:0 3px 10px rgba(0,0,0,.3);z-index:1000;display:flex;align-items:center;justify-content:center}
+
+/* Zoom */
+#zoom-wrap{position:fixed;right:14px;bottom:110px;z-index:1000;display:flex;flex-direction:column;gap:8px}
+.zbtn{width:44px;height:44px;border-radius:22px;background:rgba(255,255,255,.96);border:none;font-size:24px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.2);display:flex;align-items:center;justify-content:center;color:#1B2A4A}
+
+/* Layer panel */
+#panel{position:fixed;bottom:0;left:0;right:0;background:rgba(255,255,255,.97);border-radius:16px 16px 0 0;padding:10px 12px 16px;box-shadow:0 -4px 20px rgba(0,0,0,.12);z-index:1000}
+#panel h4{font-size:11px;font-weight:700;color:#888;margin-bottom:8px;padding-left:4px;letter-spacing:.8px}
+#chips{display:flex;gap:8px;overflow-x:auto;padding-bottom:2px}
+#chips::-webkit-scrollbar{display:none}
+.chip{display:flex;align-items:center;gap:5px;border:1.5px solid #ddd;border-radius:20px;padding:5px 12px;white-space:nowrap;font-size:12px;color:#555;cursor:pointer;background:#fff;user-select:none;transition:all .15s}
+.chip.on{color:#fff;font-weight:700}
+.cdot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+
+/* Guidance modal */
+#moverlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:2000;align-items:center;justify-content:center;padding:32px}
+#moverlay.show{display:flex}
+#mbox{background:#fff;border-radius:20px;padding:24px;max-width:360px;width:100%}
+#mbox h3{font-size:18px;margin-bottom:14px;font-weight:700}
+#mbox p{font-size:14px;line-height:1.7;color:#333;margin-bottom:8px}
+#mclose{margin-top:16px;width:100%;padding:12px;background:#1B2A4A;color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer}
+
+/* Arrival modal */
+#arrival-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:3000;align-items:center;justify-content:center;padding:32px}
+#arrival-overlay.show{display:flex}
+#arrival-box{background:#fff;border-radius:28px;padding:32px;max-width:340px;width:100%;text-align:center}
+#arrival-ring{width:80px;height:80px;border-radius:50%;background:#27AE60;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;box-shadow:0 4px 16px rgba(39,174,96,.4)}
+#arrival-check{font-size:40px;color:#fff;font-weight:700;line-height:1}
+#arrival-title{font-size:22px;font-weight:700;color:#1B2A4A;margin-bottom:10px}
+#arrival-emoji{font-size:40px;margin-bottom:6px}
+#arrival-dest{font-size:17px;font-weight:700;color:#2980B9;margin-bottom:10px}
+#arrival-sub{font-size:13px;color:#666;line-height:1.6;margin-bottom:24px}
+#arrival-done{width:100%;padding:14px;background:#27AE60;color:#fff;border:none;border-radius:30px;font-size:16px;font-weight:700;cursor:pointer;letter-spacing:.5px}
+
+/* Loading */
+#loading{position:fixed;inset:0;background:#0D1B2A;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;transition:opacity .4s}
+#loading.hide{opacity:0;pointer-events:none}
+#loading-spinner{width:48px;height:48px;border:4px solid rgba(255,255,255,.2);border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite;margin-bottom:16px}
+@keyframes spin{to{transform:rotate(360deg)}}
+#loading p{color:rgba(255,255,255,.7);font-size:14px}
+</style>
+</head>
+<body>
+
+<div id="loading"><div id="loading-spinner"></div><p>Loading map…</p></div>
+<div id="map"></div>
+<button id="gbtn">🚨</button>
+<div id="zoom-wrap">
+  <button class="zbtn" id="zin">+</button>
+  <button class="zbtn" id="zout">−</button>
+</div>
+<div id="rcard">
+  <div id="rname"></div>
+  <div id="rdist"></div>
+  <button id="rcancel">✕</button>
+</div>
+<div id="panel"><h4>LAYERS</h4><div id="chips"></div></div>
+
+<!-- Guidance modal -->
+<div id="moverlay"><div id="mbox">
+  <h3>🚨 Earthquake Safety</h3>
+  <p>• Tap any marker (<span style="display:inline-block;width:12px;height:12px;background:#27AE60;border-radius:2px;vertical-align:middle"></span> open space, 🏠 evac center, ⛽ gas, etc.) to get directions.</p>
+  <p>• Prioritize GREEN open spaces during aftershocks.</p>
+  <p>• <span style="display:inline-block;width:14px;height:14px;background:rgba(39,174,96,0.3);border:1.5px solid #27AE60;border-radius:2px;vertical-align:middle"></span> Open Spaces area on map</p>
+  <p>• Follow the colored route —
+    <span style="color:#27AE60;font-weight:700">— Safe</span>,
+    <span style="color:#F39C12;font-weight:700">— Average</span>,
+    <span style="color:#E67E22;font-weight:700">— Poor</span>,
+    <span style="color:#E74C3C;font-weight:700">— Critical</span>
+  </p>
+  <p>• Tap the same marker again to clear the route.</p>
+  <button id="mclose">Got it</button>
+</div></div>
+
+<!-- Arrival modal -->
+<div id="arrival-overlay"><div id="arrival-box">
+  <div id="arrival-ring"><div id="arrival-check">✓</div></div>
+  <div id="arrival-title">You have arrived!</div>
+  <div id="arrival-emoji"></div>
+  <div id="arrival-dest"></div>
+  <div id="arrival-sub">You have successfully reached your destination.<br>Stay safe and be aware of your surroundings.</div>
+  <button id="arrival-done">Done</button>
+</div></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ── Config injected by server or URL params ───────────────────────────────────
+const params   = new URLSearchParams(window.location.search);
+const API_BASE = params.get('api') || 'https://qgis.gghsoftware.tech/api';
+const AUTH_TOKEN = params.get('token') || '';
+
+// ── Map init ──────────────────────────────────────────────────────────────────
+const map = L.map('map', { zoomControl: false }).setView([14.9505, 120.748], 14);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 19, attribution: '© OpenStreetMap contributors',
+}).addTo(map);
+
+// ── Load GeoJSON from server ──────────────────────────────────────────────────
+const GJ = {};
+const GJ_FILES = [
+  'Political_Boundary','Ground_Shaking_Intensity','Evacuation_Centers','Open_Spaces',
+  'Roads_Safe','Roads_Average','Roads_Poor','Roads_Critical',
+  'Evac_Centers_Pin','Open_Spaces_Pin','Gas_Stations','Markets','Banks','Restaurants',
+];
+const GJ_KEYS = {
+  Political_Boundary:'boundary', Ground_Shaking_Intensity:'shaking',
+  Evacuation_Centers:'evac', Open_Spaces:'open',
+  Roads_Safe:'safe', Roads_Average:'average', Roads_Poor:'poor', Roads_Critical:'critical',
+  Evac_Centers_Pin:'evac_pin', Open_Spaces_Pin:'open_pin',
+  Gas_Stations:'gas', Markets:'markets', Banks:'banks', Restaurants:'resto',
+};
+
+async function loadAllGeoJSON() {
+  await Promise.all(GJ_FILES.map(async name => {
+    const res = await fetch(`geojson/${name}.json`);
+    GJ[GJ_KEYS[name]] = await res.json();
+  }));
+}
+
+// ── Road condition classification ─────────────────────────────────────────────
+const ROAD_CONDITIONS = [
+  { label:'safe',     color:'#27AE60' },
+  { label:'average',  color:'#F39C12' },
+  { label:'poor',     color:'#E67E22' },
+  { label:'critical', color:'#E74C3C' },
+];
+const SNAP_THRESHOLD = 60;
+
+function distPointToSegment(pLat,pLng,aLat,aLng,bLat,bLng){
+  const ls=111320, lsc=111320*Math.cos(pLat*Math.PI/180);
+  const px=pLng*lsc,py=pLat*ls,ax=aLng*lsc,ay=aLat*ls,bx=bLng*lsc,by=bLat*ls;
+  const dx=bx-ax,dy=by-ay,lenSq=dx*dx+dy*dy;
+  if(lenSq===0) return Math.sqrt((px-ax)**2+(py-ay)**2);
+  let t=((px-ax)*dx+(py-ay)*dy)/lenSq;
+  t=Math.max(0,Math.min(1,t));
+  return Math.sqrt((px-(ax+t*dx))**2+(py-(ay+t*dy))**2);
+}
+
+function classifyPoint(lat,lng){
+  let best=null, bestDist=SNAP_THRESHOLD;
+  for(const rc of ROAD_CONDITIONS){
+    const data = GJ[rc.label];
+    if(!data) continue;
+    for(const f of data.features){
+      const lines = f.geometry.type==='LineString'?[f.geometry.coordinates]
+        :f.geometry.type==='MultiLineString'?f.geometry.coordinates:[];
+      for(const line of lines){
+        for(let i=0;i<line.length-1;i++){
+          const [aLng,aLat]=line[i],[bLng,bLat]=line[i+1];
+          const d=distPointToSegment(lat,lng,aLat,aLng,bLat,bLng);
+          if(d<bestDist){bestDist=d;best=rc.color;}
+        }
+      }
+    }
+  }
+  return best;
+}
+
+function colorizeRoute(coords, fallback){
+  // coords: [[lng,lat],...] from OSRM API — convert to {latitude,longitude} first
+  const path = coords.map(([lng,lat]) => ({latitude:lat, longitude:lng}));
+  if(path.length<2) return [{latlngs:path.map(p=>[p.latitude,p.longitude]),color:fallback}];
+  const classified = path.map(p => ({p, color: classifyPoint(p.latitude, p.longitude) || fallback}));
+  const segs=[];
+  let cur=[classified[0].p], curColor=classified[0].color;
+  for(let i=1;i<classified.length;i++){
+    const {p,color}=classified[i];
+    if(color===curColor){cur.push(p);}
+    else{
+      cur.push(p);
+      segs.push({latlngs:cur.map(x=>[x.latitude,x.longitude]),color:curColor});
+      cur=[p]; curColor=color;
+    }
+  }
+  if(cur.length>1) segs.push({latlngs:cur.map(x=>[x.latitude,x.longitude]),color:curColor});
+  return segs;
+}
+
+// ── Haversine ─────────────────────────────────────────────────────────────────
+function haversine(a,b,c,d){
+  const R=6371000,r=x=>x*Math.PI/180;
+  const x=Math.sin(r(c-a)/2)**2+Math.cos(r(a))*Math.cos(r(c))*Math.sin(r(d-b)/2)**2;
+  return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
+}
+function fmt(m){return m>=1000?(m/1000).toFixed(1)+' km':Math.round(m)+' m'}
+
+// ── Voice ─────────────────────────────────────────────────────────────────────
+function speak(text){
+  // Try ReactNativeWebView first (when loaded in WebView)
+  if(window.ReactNativeWebView){
+    window.ReactNativeWebView.postMessage(JSON.stringify({type:'speak',text}));
+    return;
+  }
+  // Fallback: Web Speech API (browser)
+  if(window.speechSynthesis){
+    window.speechSynthesis.cancel();
+    const u=new SpeechSynthesisUtterance(text);
+    u.lang='en-US'; u.rate=0.9;
+    window.speechSynthesis.speak(u);
+  }
+}
+
+// ── User location ─────────────────────────────────────────────────────────────
+let userLat=14.9505, userLng=120.748, userDot=null, userCircle=null, locationReceived=false;
+
+function updateUserDot(lat,lng){
+  userLat=lat; userLng=lng;
+  if(userDot) map.removeLayer(userDot);
+  if(userCircle) map.removeLayer(userCircle);
+  userCircle=L.circle([lat,lng],{radius:25,fillColor:'rgba(59,79,224,0.2)',color:'#3B4FE0',weight:2,fillOpacity:0.2}).addTo(map);
+  userDot=L.circleMarker([lat,lng],{radius:8,fillColor:'#3B4FE0',color:'#fff',weight:3,fillOpacity:1}).addTo(map);
+  if(!locationReceived){ locationReceived=true; map.setView([lat,lng],15); }
+  checkNavProgress(lat,lng);
+}
+
+// React Native injects location via postMessage
+document.addEventListener('message',e=>{try{const m=JSON.parse(e.data);if(m.type==='location')updateUserDot(m.lat,m.lng);}catch{}});
+window.addEventListener('message',e=>{try{const m=JSON.parse(e.data);if(m.type==='location')updateUserDot(m.lat,m.lng);}catch{}});
+
+// Browser geolocation fallback (when opened in browser, not WebView)
+if(!window.ReactNativeWebView && navigator.geolocation){
+  // Auto-locate on load
+  navigator.geolocation.getCurrentPosition(
+    p=>{ updateUserDot(p.coords.latitude,p.coords.longitude); },
+    ()=>{ console.warn('Browser GPS denied — using default location'); },
+    {enableHighAccuracy:true, timeout:10000}
+  );
+  navigator.geolocation.watchPosition(
+    p=>{ updateUserDot(p.coords.latitude,p.coords.longitude); },
+    ()=>{},
+    {enableHighAccuracy:true, maximumAge:5000}
+  );
+}
+
+// ── Locate Me button (browser only) ──────────────────────────────────────────
+if(!window.ReactNativeWebView){
+  const locBtn=document.createElement('button');
+  locBtn.id='locbtn';
+  locBtn.textContent='📍';
+  locBtn.title='Center on my location';
+  locBtn.style.cssText='position:fixed;bottom:110px;left:14px;width:44px;height:44px;border-radius:22px;background:rgba(255,255,255,.96);border:none;font-size:20px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.2);z-index:1000;display:flex;align-items:center;justify-content:center';
+  document.body.appendChild(locBtn);
+  locBtn.onclick=()=>{
+    if(!navigator.geolocation){alert('Geolocation not supported');return;}
+    navigator.geolocation.getCurrentPosition(p=>{
+      updateUserDot(p.coords.latitude,p.coords.longitude);
+      map.setView([p.coords.latitude,p.coords.longitude],15);
+    },()=>alert('Could not get location. Please allow location access.'),{enableHighAccuracy:true});
+  };
+}
+
+// ── Navigation state ──────────────────────────────────────────────────────────
+let routeLayers=[], selKey=null, activeDestDef=null, activeDestLat=null, activeDestLng=null;
+let routePath=[], announcedWaypoints=new Set(), arrivedFlag=false;
+
+function remainingDist(lat,lng){
+  if(!routePath.length) return 0;
+  let minIdx=0,minD=Infinity;
+  routePath.forEach((p,i)=>{
+    const d=haversine(lat,lng,p.latitude,p.longitude);
+    if(d<minD){minD=d;minIdx=i;}
+  });
+  let d=0;
+  for(let i=minIdx;i<routePath.length-1;i++)
+    d+=haversine(routePath[i].latitude,routePath[i].longitude,routePath[i+1].latitude,routePath[i+1].longitude);
+  return d;
+}
+
+function checkNavProgress(lat,lng){
+  if(!activeDestDef||arrivedFlag) return;
+  const distToDest=haversine(lat,lng,activeDestLat,activeDestLng);
+  const remaining=remainingDist(lat,lng);
+
+  if(distToDest<20){
+    arrivedFlag=true;
+    showArrival(activeDestDef);
+    speak('You have arrived at your destination. '+activeDestDef.label);
+    if(window.ReactNativeWebView){
+      window.ReactNativeWebView.postMessage(JSON.stringify({type:'arrived',label:activeDestDef.label,emoji:activeDestDef.emoji}));
+    }
+    return;
+  }
+
+  [500,200,100,50].forEach(t=>{
+    const k='dist-'+t;
+    if(remaining<=t&&remaining>t*0.5&&!announcedWaypoints.has(k)){
+      announcedWaypoints.add(k);
+      speak('In '+fmt(remaining)+', you will reach '+activeDestDef.label);
+    }
+  });
+}
+
+// ── Arrival modal ─────────────────────────────────────────────────────────────
+function showArrival(def){
+  document.getElementById('arrival-emoji').textContent=def.emoji;
+  document.getElementById('arrival-dest').textContent=def.label;
+  document.getElementById('arrival-overlay').classList.add('show');
+}
+document.getElementById('arrival-done').onclick=()=>{
+  document.getElementById('arrival-overlay').classList.remove('show');
+  clearRoute();
+};
+
+// ── Route ─────────────────────────────────────────────────────────────────────
+function clearRoute(){
+  routeLayers.forEach(l=>map.removeLayer(l)); routeLayers=[];
+  selKey=null; activeDestDef=null; activeDestLat=null; activeDestLng=null;
+  routePath=[]; announcedWaypoints=new Set(); arrivedFlag=false;
+  document.getElementById('rcard').style.display='none';
+}
+
+async function doRoute(toLat,toLng,def){
+  if(!locationReceived){
+    alert('Waiting for your GPS location. Please try again in a moment.');
+    return;
+  }
+  clearRoute();
+  activeDestDef=def; activeDestLat=toLat; activeDestLng=toLng;
+  const dist=haversine(userLat,userLng,toLat,toLng);
+  let isFallback=true;
+
+  try{
+    // Use local proxy when running on localhost to avoid CORS
+    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    let url;
+    if(isLocal){
+      url=`/proxy/route?from_lat=${userLat}&from_lng=${userLng}&to_lat=${toLat}&to_lng=${toLng}&api=${encodeURIComponent(API_BASE)}&token=${encodeURIComponent(AUTH_TOKEN)}`;
+    } else {
+      url=`${API_BASE}/route?from_lat=${userLat}&from_lng=${userLng}&to_lat=${toLat}&to_lng=${toLng}`;
+    }
+    console.log('[Route] Fetching:', url);
+    const headers={'Accept':'application/json'};
+    if(!isLocal && AUTH_TOKEN) headers['Authorization']='Bearer '+AUTH_TOKEN;
+    const res=await fetch(url,{headers,signal:AbortSignal.timeout(10000)});
+    const data=await res.json();
+    console.log('[Route] Response:', data);
+    if(data.ok&&data.coordinates&&data.coordinates.length>1){
+      isFallback=false;
+      routePath=data.coordinates.map(([lng,lat])=>({latitude:lat,longitude:lng}));
+      const segs=colorizeRoute(data.coordinates,def.color);
+      segs.forEach(seg=>{
+        routeLayers.push(L.polyline(seg.latlngs,{color:seg.color,weight:6,opacity:.9}).addTo(map));
+      });
+      const lats=data.coordinates.map(c=>c[1]),lngs=data.coordinates.map(c=>c[0]);
+      map.fitBounds([[Math.min(...lats),Math.min(...lngs)],[Math.max(...lats),Math.max(...lngs)]],{padding:[60,60]});
+      document.getElementById('rdist').textContent=fmt(data.distance)+' via road';
+      speak('Starting navigation to '+def.label);
+    }
+  }catch(e){ console.error('[Route] Error:', e.message); }
+
+  if(isFallback){
+    routePath=[{latitude:userLat,longitude:userLng},{latitude:toLat,longitude:toLng}];
+    routeLayers.push(L.polyline([[userLat,userLng],[toLat,toLng]],{color:def.color,weight:5,opacity:.85,dashArray:'8,4'}).addTo(map));
+    map.fitBounds([[userLat,userLng],[toLat,toLng]],{padding:[60,60]});
+    document.getElementById('rdist').textContent=fmt(dist)+' (straight line)';
+    speak('Navigating to '+def.label);
+  }
+
+  document.getElementById('rname').textContent=def.emoji+' '+def.label;
+  document.getElementById('rcard').style.display='block';
+}
+
+// ── Layer definitions ─────────────────────────────────────────────────────────
+const POLY=[
+  {key:'boundary',label:'Boundary',  color:'#1B2A4A',type:'line',opacity:1,  on:true, dash:'8,6'},
+  {key:'shaking', label:'Shaking',   color:'#C0392B',type:'fill',opacity:.4, on:false},
+  {key:'evac',    label:'Evac Areas',color:'#2980B9',type:'fill',opacity:.3, on:true},
+  {key:'open',    label:'Open Areas',color:'#27AE60',type:'fill',opacity:.3, on:true},
+  {key:'safe',    label:'Safe',      color:'#27AE60',type:'line',opacity:1,  on:true},
+  {key:'average', label:'Average',   color:'#F39C12',type:'line',opacity:1,  on:true},
+  {key:'poor',    label:'Poor',      color:'#E67E22',type:'line',opacity:1,  on:true},
+  {key:'critical',label:'Critical',  color:'#E74C3C',type:'line',opacity:1,  on:true},
+];
+const PTS=[
+  {key:'open_pin',label:'Open Spaces', emoji:'🟢',color:'#27AE60',on:true},
+  {key:'evac_pin',label:'Evac Centers',emoji:'🏠',color:'#2980B9',on:true},
+  {key:'gas',     label:'Gas',         emoji:'⛽',color:'#E67E22',on:true},
+  {key:'resto',   label:'Food',        emoji:'🍽️',color:'#C0392B',on:true},
+  {key:'markets', label:'Markets',     emoji:'🛒',color:'#8E44AD',on:true},
+  {key:'banks',   label:'Banks',       emoji:'🏦',color:'#2980B9',on:true},
+];
+
+const layers={}, state={};
+
+function buildLayers(){
+  POLY.forEach(d=>{
+    const l=d.type==='fill'
+      ?L.geoJSON(GJ[d.key],{style:{color:d.color,fillColor:d.color,fillOpacity:d.opacity,weight:1,opacity:.7}})
+      :L.geoJSON(GJ[d.key],{style:{color:d.color,weight:2,opacity:d.opacity,dashArray:d.dash||null}});
+    layers[d.key]=l; state[d.key]=d.on;
+    if(d.on) l.addTo(map);
+  });
+
+  PTS.forEach(d=>{
+    const icon=L.divIcon({
+      html:`<div style="width:32px;height:32px;border-radius:50%;background:${d.color};display:flex;align-items:center;justify-content:center;border:2.5px solid #fff;font-size:14px;box-shadow:0 2px 6px rgba(0,0,0,.3)">${d.emoji}</div>`,
+      className:'',iconSize:[32,32],iconAnchor:[16,16],
+    });
+    const l=L.geoJSON(GJ[d.key],{
+      filter:f=>f.geometry.type==='Point',
+      pointToLayer:(f,ll)=>L.marker(ll,{icon}),
+    });
+    l.on('click',e=>{
+      const ll=e.latlng, k=d.key+ll.lat.toFixed(5)+ll.lng.toFixed(5);
+      if(selKey===k){clearRoute();return;}
+      selKey=k;
+      doRoute(ll.lat,ll.lng,d);
+    });
+    layers[d.key]=l; state[d.key]=d.on;
+    if(d.on) l.addTo(map);
+  });
+}
+
+// ── Chips ─────────────────────────────────────────────────────────────────────
+function buildChips(){
+  const container=document.getElementById('chips');
+  [...POLY,...PTS].forEach(d=>{
+    const c=document.createElement('div');
+    c.className='chip'+(d.on?' on':'');
+    c.style.borderColor=d.on?d.color:'#ddd';
+    c.style.background=d.on?d.color:'#fff';
+    const dot=document.createElement('div');
+    if(d.emoji){dot.textContent=d.emoji;dot.style.fontSize='13px';}
+    else{dot.className='cdot';dot.style.background=d.on?'#fff':d.color;}
+    const lbl=document.createElement('span');lbl.textContent=d.label;
+    c.appendChild(dot);c.appendChild(lbl);
+    c.addEventListener('click',()=>{
+      const on=!state[d.key]; state[d.key]=on;
+      if(on) layers[d.key].addTo(map); else map.removeLayer(layers[d.key]);
+      c.className='chip'+(on?' on':'');
+      c.style.borderColor=on?d.color:'#ddd';
+      c.style.background=on?d.color:'#fff';
+      if(!d.emoji) dot.style.background=on?'#fff':d.color;
+    });
+    container.appendChild(c);
+  });
+}
+
+// ── UI events ─────────────────────────────────────────────────────────────────
+document.getElementById('zin').onclick=()=>map.zoomIn();
+document.getElementById('zout').onclick=()=>map.zoomOut();
+document.getElementById('gbtn').onclick=()=>document.getElementById('moverlay').classList.add('show');
+document.getElementById('mclose').onclick=()=>document.getElementById('moverlay').classList.remove('show');
+document.getElementById('moverlay').onclick=e=>{if(e.target.id==='moverlay')document.getElementById('moverlay').classList.remove('show');};
+document.getElementById('rcancel').onclick=clearRoute;
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+(async()=>{
+  await loadAllGeoJSON();
+  buildLayers();
+  buildChips();
+  // Hide loading screen
+  const loader=document.getElementById('loading');
+  loader.classList.add('hide');
+  setTimeout(()=>loader.style.display='none',400);
+})();
+</script>
+</body>
+</html>

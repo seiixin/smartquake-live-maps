@@ -1,0 +1,13 @@
+{
+  "name": "qgis-live-maps",
+  "version": "1.0.0",
+  "description": "SmartQuake live hazard map — served as WebView fallback",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}
