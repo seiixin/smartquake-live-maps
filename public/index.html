@@ -101,9 +101,25 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 // ── Config injected by server or URL params ───────────────────────────────────
-const params   = new URLSearchParams(window.location.search);
-const API_BASE = params.get('api') || 'https://qgis.gghsoftware.tech/api';
-const AUTH_TOKEN = params.get('token') || '';
+const params     = new URLSearchParams(window.location.search);
+const API_BASE   = params.get('api')   || 'https://qgis.gghsoftware.tech/api';
+let   AUTH_TOKEN = params.get('token') || '';
+
+// Also accept token via postMessage (more reliable than URL params for long tokens)
+document.addEventListener('message', e => {
+  try {
+    const msg = JSON.parse(e.data);
+    if (msg.type === 'location') updateUserDot(msg.lat, msg.lng);
+    if (msg.type === 'token')    AUTH_TOKEN = msg.token;
+  } catch {}
+});
+window.addEventListener('message', e => {
+  try {
+    const msg = JSON.parse(e.data);
+    if (msg.type === 'location') updateUserDot(msg.lat, msg.lng);
+    if (msg.type === 'token')    AUTH_TOKEN = msg.token;
+  } catch {}
+});
 
 // ── Map init ──────────────────────────────────────────────────────────────────
 const map = L.map('map', { zoomControl: false }).setView([14.9505, 120.748], 14);
@@ -229,9 +245,7 @@ function updateUserDot(lat,lng){
   checkNavProgress(lat,lng);
 }
 
-// React Native injects location via postMessage
-document.addEventListener('message',e=>{try{const m=JSON.parse(e.data);if(m.type==='location')updateUserDot(m.lat,m.lng);}catch{}});
-window.addEventListener('message',e=>{try{const m=JSON.parse(e.data);if(m.type==='location')updateUserDot(m.lat,m.lng);}catch{}});
+// React Native injects location via postMessage (handled above in config section)
 
 // Browser geolocation fallback (when opened in browser, not WebView)
 if(!window.ReactNativeWebView && navigator.geolocation){
@@ -411,8 +425,8 @@ async function doRoute(toLat,toLng,def){
     routePath=[{latitude:userLat,longitude:userLng},{latitude:toLat,longitude:toLng}];
     routeLayers.push(L.polyline([[userLat,userLng],[toLat,toLng]],{color:def.color,weight:5,opacity:.85,dashArray:'8,4'}).addTo(map));
     map.fitBounds([[userLat,userLng],[toLat,toLng]],{padding:[60,60]});
-    document.getElementById('rdist').textContent=fmt(dist)+' (straight line)';
-    speak('Navigating to '+def.label);
+    document.getElementById('rdist').textContent=fmt(dist)+' (straight line — road route unavailable)';
+    speak('Navigating to '+def.label+'. Road route unavailable, showing straight line.');
   }
 
   document.getElementById('rname').textContent=def.emoji+' '+def.label;
